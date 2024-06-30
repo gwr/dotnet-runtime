@@ -123,9 +123,9 @@ typedef cpuset_t cpu_set_t;
 #include "cgroup.h"
 
 #ifndef __APPLE__
-#if HAVE_SYSCONF && HAVE__SC_AVPHYS_PAGES
+#if HAVE_SYSCONF && defined(_SC_AVPHYS_PAGES)
 #define SYSCONF_PAGES _SC_AVPHYS_PAGES
-#elif HAVE_SYSCONF && HAVE__SC_PHYS_PAGES
+#elif HAVE_SYSCONF && defined(_SC_PHYS_PAGES)
 #define SYSCONF_PAGES _SC_PHYS_PAGES
 #else
 #error Dont know how to get page-size on this architecture!
@@ -343,7 +343,7 @@ bool GCToOSInterface::Initialize()
 #endif
 
     // Get the physical memory size
-#if HAVE_SYSCONF && HAVE__SC_PHYS_PAGES
+#if HAVE_SYSCONF && defined(_SC_PHYS_PAGES)
     long pages = sysconf(_SC_PHYS_PAGES);
     if (pages == -1)
     {
@@ -997,7 +997,7 @@ static uint64_t GetMemorySizeMultiplier(char units)
     return 1;
 }
 
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(__sun)
 // Try to read the MemAvailable entry from /proc/meminfo.
 // Return true if the /proc/meminfo existed, the entry was present and we were able to parse it.
 static bool ReadMemAvailable(uint64_t* memAvailable)
@@ -1030,7 +1030,7 @@ static bool ReadMemAvailable(uint64_t* memAvailable)
 
     return foundMemAvailable;
 }
-#endif // __APPLE__
+#endif // !__APPLE__ && !__sun
 
 // Get size of the largest cache on the processor die
 // Parameters:
@@ -1259,12 +1259,14 @@ uint64_t GetAvailablePhysicalMemory()
     sysctlbyname("vm.stats.vm.v_free_count", &free_count, &sz, NULL, 0);
 
     available = (inactive_count + laundry_count + free_count) * sysconf(_SC_PAGESIZE);
-#elif defined(__sun) // illumos
-
-    // Could put this first with #ifdef _SC_AVPHYS_PAGES
-    available = sysconf(_SC_AVPHYS_PAGES) * getpagesize();
-
-#else // Linux
+#else // Linux, other
+    // Would like a config define: HAVE_PROC_MEMINFO
+    // And actually, _SC_AVPHYS_PAGES would probably be better on Linux too.
+    // It gets you what shows as MemFree in /proc/meminfo (better?)
+#if defined(__sun)
+    // Don't want the noise of trying to open /proc/meminfo
+    static volatile bool tryReadMemInfo = false;
+#else // not sun
     static volatile bool tryReadMemInfo = true;
 
     if (tryReadMemInfo)
@@ -1273,6 +1275,7 @@ uint64_t GetAvailablePhysicalMemory()
         // if we have failed to access the file or the file didn't contain the MemAvailable value.
         tryReadMemInfo = ReadMemAvailable(&available);
     }
+#endif // not sun
 
     if (!tryReadMemInfo)
     {
