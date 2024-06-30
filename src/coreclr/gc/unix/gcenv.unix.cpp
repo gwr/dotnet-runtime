@@ -1259,6 +1259,11 @@ uint64_t GetAvailablePhysicalMemory()
     sysctlbyname("vm.stats.vm.v_free_count", &free_count, &sz, NULL, 0);
 
     available = (inactive_count + laundry_count + free_count) * sysconf(_SC_PAGESIZE);
+#elif defined(__sun) // illumos
+
+    // Could put this first with #ifdef _SC_AVPHYS_PAGES
+    available = sysconf(_SC_AVPHYS_PAGES) * getpagesize();
+
 #else // Linux
     static volatile bool tryReadMemInfo = true;
 
