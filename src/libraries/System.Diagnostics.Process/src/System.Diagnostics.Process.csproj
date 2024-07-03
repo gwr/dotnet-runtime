@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(NetCoreAppCurrent)-windows;$(NetCoreAppCurrent)-freebsd;$(NetCoreAppCurrent)-linux;$(NetCoreAppCurrent)-osx;$(NetCoreAppCurrent)-maccatalyst;$(NetCoreAppCurrent)-ios;$(NetCoreAppCurrent)-tvos;$(NetCoreAppCurrent)</TargetFrameworks>
+    <TargetFrameworks>$(NetCoreAppCurrent)-windows;$(NetCoreAppCurrent)-freebsd;$(NetCoreAppCurrent)-linux;$(NetCoreAppCurrent)-osx;$(NetCoreAppCurrent)-maccatalyst;$(NetCoreAppCurrent)-ios;$(NetCoreAppCurrent)-tvos;$(NetCoreAppCurrent)-illumos;$(NetCoreAppCurrent)</TargetFrameworks>
     <DefineConstants>$(DefineConstants);FEATURE_REGISTRY</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <UseCompilerGeneratedDocXmlFile>false</UseCompilerGeneratedDocXmlFile>
@@ -361,6 +361,22 @@
              Link="Common\Interop\FreeBSD\Interop.Process.cs" />
     <Compile Include="$(CommonPath)Interop\FreeBSD\Interop.Process.GetProcInfo.cs"
              Link="Common\Interop\FreeBSD\Interop.Process.GetProcInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'illumos' or '$(TargetPlatformIdentifier)' == 'sunos'">
+    <Compile Include="System\Diagnostics\Process.BSD.cs" />
+    <Compile Include="System\Diagnostics\Process.SunOS.cs" />
+    <Compile Include="System\Diagnostics\ProcessManager.BSD.cs" />
+    <Compile Include="System\Diagnostics\ProcessManager.SunOS.cs" />
+    <Compile Include="System\Diagnostics\ProcessThread.SunOS.cs" />
+    <!-- things from (top)/src/libraries/Common come via Links -->
+    <!-- Skip Common Interop.Libraries.cs (libmsquic) for now -->
+    <Compile Include="$(CommonPath)Interop\SunOS\System.Native\Interop.Kstat.cs"
+             Link="Common\Interop\SunOS\System.Native\Interop.Kstat.cs" />
+    <Compile Include="$(CommonPath)Interop\SunOS\Interop.Process.cs"
+             Link="Common\Interop\SunOS\Interop.Process.cs" />
+    <Compile Include="$(CommonPath)Interop\SunOS\Interop.Process.GetProcInfo.cs"
+             Link="Common\Interop\SunOS\Interop.Process.GetProcInfo.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios' or '$(TargetPlatformIdentifier)' == 'tvos'">
