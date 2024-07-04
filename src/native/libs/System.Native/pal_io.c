@@ -436,10 +436,14 @@ static const size_t dirent_alignment = 8;
 int32_t SystemNative_GetReadDirRBufferSize(void)
 {
 #if HAVE_READDIR_R
+    int32_t result = sizeof(struct dirent);
+#ifdef TARGET_SUNOS
+    result += 256;
+#endif
     // dirent should be under 2k in size
-    assert(sizeof(struct dirent) < 2048);
+    assert(result < 2048);
     // add some extra space so we can align the buffer to dirent.
-    return sizeof(struct dirent) + dirent_alignment - 1;
+    return result + dirent_alignment - 1;
 #else
     return 0;
 #endif
