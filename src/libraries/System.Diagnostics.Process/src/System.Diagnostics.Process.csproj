@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(NetCoreAppCurrent)-windows;$(NetCoreAppCurrent)-freebsd;$(NetCoreAppCurrent)-illumos;$(NetCoreAppCurrent)-linux;$(NetCoreAppCurrent)-osx;$(NetCoreAppCurrent)-maccatalyst;$(NetCoreAppCurrent)-ios;$(NetCoreAppCurrent)-tvos;$(NetCoreAppCurrent)</TargetFrameworks>
+    <TargetFrameworks>$(NetCoreAppCurrent)-windows;$(NetCoreAppCurrent)-freebsd;$(NetCoreAppCurrent)-linux;$(NetCoreAppCurrent)-osx;$(NetCoreAppCurrent)-maccatalyst;$(NetCoreAppCurrent)-ios;$(NetCoreAppCurrent)-tvos;$(NetCoreAppCurrent)-illumos;$(NetCoreAppCurrent)</TargetFrameworks>
     <DefineConstants>$(DefineConstants);FEATURE_REGISTRY</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <UseCompilerGeneratedDocXmlFile>false</UseCompilerGeneratedDocXmlFile>
@@ -363,10 +363,10 @@
              Link="Common\Interop\FreeBSD\Interop.Process.GetProcInfo.cs" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'illumos'">
-    <Compile Include="System\Diagnostics\Process.illumos.cs" />
-    <Compile Include="System\Diagnostics\ProcessManager.illumos.cs" />
-    <Compile Include="System\Diagnostics\ProcessThread.illumos.cs" />
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'illumos' or '$(TargetPlatformIdentifier)' == 'sunos'">
+    <Compile Include="System\Diagnostics\Process.SunOS.cs" />
+    <Compile Include="System\Diagnostics\ProcessManager.SunOS.cs" />
+    <Compile Include="System\Diagnostics\ProcessThread.SunOS.cs" />
     <Compile Include="$(CommonPath)Interop\Unix\System.Native\Interop.TimeSpec.cs"
              Link="Common\Interop\Unix\System.Native\Interop.TimeSpec.cs" />
     <Compile Include="$(CommonPath)Interop\SunOS\procfs\Interop.ProcFsStat.cs"
