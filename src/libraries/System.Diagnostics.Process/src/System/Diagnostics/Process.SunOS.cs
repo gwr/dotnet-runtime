@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Threading;
@@ -18,35 +19,6 @@ namespace System.Diagnostics
 {
     public partial class Process : IDisposable
     {
-        /// <summary>
-        /// Creates an array of <see cref="Process"/> components that are associated with process resources on a
-        /// remote computer. These process resources share the specified process name.
-        /// </summary>
-        [UnsupportedOSPlatform("ios")]
-        [UnsupportedOSPlatform("tvos")]
-        [SupportedOSPlatform("maccatalyst")]
-        public static Process[] GetProcessesByName(string? processName, string machineName)
-        {
-            ProcessManager.ThrowIfRemoteMachine(machineName);
-
-            processName ??= "";
-
-            ArrayBuilder<Process> processes = default;
-            foreach (int pid in ProcessManager.EnumerateProcessIds())
-            {
-                if (Interop.procfs.TryReadProcessStatusInfo(pid, out Interop.procfs.ProcessStatusInfo status, out string? shortProcessName))
-                {
-                    string actualProcessName = GetUntruncatedProcessName(pid, shortProcessName);
-                    if ((processName == "" || string.Equals(processName, actualProcessName, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        ProcessInfo processInfo = ProcessManager.CreateProcessInfo(ref status, shortProcessName, actualProcessName);
-                        processes.Add(new Process(machineName, isRemoteMachine: false, pid, processInfo));
-                    }
-                }
-            }
-
-            return processes.ToArray();
-        }
 
         /// <summary>Gets the amount of time the process has spent running code inside the operating system core.</summary>
         [UnsupportedOSPlatform("ios")]
@@ -115,38 +87,6 @@ namespace System.Diagnostics
             // TODO: remove this method if not needed
         }
 
-        /// <summary>
-        /// Gets or sets which processors the threads in this process can be scheduled to run on.
-        /// </summary>
-        private IntPtr ProcessorAffinityCore
-        {
-            get
-            {
-                throw new PlatformNotSupportedException();
-            }
-            set
-            {
-                throw new PlatformNotSupportedException();
-            }
-        }
-
-        /// <summary>
-        /// Make sure we have obtained the min and max working set limits.
-        /// </summary>
-        private void GetWorkingSetLimits(out IntPtr minWorkingSet, out IntPtr maxWorkingSet)
-        {
-            throw new PlatformNotSupportedException();
-        }
-
-        /// <summary>Sets one or both of the minimum and maximum working set limits.</summary>
-        /// <param name="newMin">The new minimum working set limit, or null not to change it.</param>
-        /// <param name="newMax">The new maximum working set limit, or null not to change it.</param>
-        /// <param name="resultingMin">The resulting minimum working set limit after any changes applied.</param>
-        /// <param name="resultingMax">The resulting maximum working set limit after any changes applied.</param>
-        private static void SetWorkingSetLimitsCore(IntPtr? newMin, IntPtr? newMax, out IntPtr resultingMin, out IntPtr resultingMax)
-        {
-            throw new PlatformNotSupportedException();
-        }
 
         // ----------------------------------
         // ---- Unix PAL layer ends here ----

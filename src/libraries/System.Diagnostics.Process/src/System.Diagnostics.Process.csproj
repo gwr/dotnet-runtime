@@ -364,6 +364,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'illumos' or '$(TargetPlatformIdentifier)' == 'sunos'">
+    <Compile Include="System\Diagnostics\Process.BSD.cs" />
     <Compile Include="System\Diagnostics\Process.SunOS.cs" />
     <Compile Include="System\Diagnostics\ProcessManager.SunOS.cs" />
     <Compile Include="System\Diagnostics\ProcessThread.SunOS.cs" />
