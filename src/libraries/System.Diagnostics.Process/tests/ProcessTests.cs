@@ -601,22 +601,26 @@ namespace System.Diagnostics.Tests
             }
         }
 
+        // XXX No longer skip: OSX, FreeBSD
         [Fact]
-        [SkipOnPlatform(TestPlatforms.OSX | TestPlatforms.FreeBSD | TestPlatforms.iOS | TestPlatforms.MacCatalyst | TestPlatforms.tvOS, "Getting MaxWorkingSet is not supported on OSX, BSD, iOS, MacCatalyst, and tvOS.")]
+        [SkipOnPlatform(TestPlatforms.iOS | TestPlatforms.MacCatalyst | TestPlatforms.tvOS, "Getting MaxWorkingSet is not supported on OSX, BSD, iOS, MacCatalyst, and tvOS.")]
         public void MaxWorkingSet_GetNotStarted_ThrowsInvalidOperationException()
         {
             var process = new Process();
             Assert.Throws<InvalidOperationException>(() => process.MaxWorkingSet);
         }
 
-        [Fact]
-        [PlatformSpecific(TestPlatforms.OSX | TestPlatforms.FreeBSD)]
-        public void MaxValueWorkingSet_GetSetMacos_ThrowsPlatformSupportedException()
-        {
-            var process = new Process();
-            Assert.Throws<PlatformNotSupportedException>(() => process.MaxWorkingSet);
-            Assert.Throws<PlatformNotSupportedException>(() => process.MaxWorkingSet = (IntPtr)1);
-        }
+        // XXX This appears to be testing for incorrect behavoir which has been fixed.
+        // XXX See https://github.com/dotnet/runtime/issues/105422
+        // The correct exception for a new process is: InvalidOperationException
+        // [Fact]
+        // [PlatformSpecific(TestPlatforms.OSX | TestPlatforms.FreeBSD)]
+        // public void MaxValueWorkingSet_GetSetMacos_ThrowsPlatformSupportedException()
+        // {
+        //    var process = new Process();
+        //    Assert.Throws<PlatformNotSupportedException>(() => process.MaxWorkingSet);
+        //    Assert.Throws<PlatformNotSupportedException>(() => process.MaxWorkingSet = (IntPtr)1);
+        // }
 
         [ConditionalFact(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         public void TestMinWorkingSet()
@@ -656,21 +660,25 @@ namespace System.Diagnostics.Tests
             }
         }
 
+        // XXX No longer skip: OSX, FreeBSD
         [Fact]
-        [SkipOnPlatform(TestPlatforms.OSX | TestPlatforms.FreeBSD | TestPlatforms.iOS | TestPlatforms.MacCatalyst | TestPlatforms.tvOS, "Getting MinWorkingSet is not supported on OSX, BSD, iOS, MacCatalyst, and tvOS.")]
+        [SkipOnPlatform(TestPlatforms.iOS | TestPlatforms.MacCatalyst | TestPlatforms.tvOS, "Getting MinWorkingSet is not supported on OSX, BSD, iOS, MacCatalyst, and tvOS.")]
         public void MinWorkingSet_GetNotStarted_ThrowsInvalidOperationException()
         {
             var process = new Process();
             Assert.Throws<InvalidOperationException>(() => process.MinWorkingSet);
         }
 
-        [Fact]
-        [PlatformSpecific(TestPlatforms.OSX | TestPlatforms.FreeBSD)]
-        public void MinWorkingSet_GetMacos_ThrowsPlatformSupportedException()
-        {
-            var process = new Process();
-            Assert.Throws<PlatformNotSupportedException>(() => process.MinWorkingSet);
-        }
+        // XXX This appears to be testing for incorrect behavoir which has been fixed.
+        // XXX See https://github.com/dotnet/runtime/issues/105422
+        // The correct exception for a new process is: InvalidOperationException
+        // [Fact]
+        // [PlatformSpecific(TestPlatforms.OSX | TestPlatforms.FreeBSD)]
+        // public void MinWorkingSet_GetMacos_ThrowsPlatformSupportedException()
+        // {
+        //    var process = new Process();
+        //    Assert.Throws<PlatformNotSupportedException>(() => process.MinWorkingSet);
+        // }
 
         [Fact]
         public void TestModules()
