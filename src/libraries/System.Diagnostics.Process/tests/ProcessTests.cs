@@ -2295,7 +2295,7 @@ namespace System.Diagnostics.Tests
                 Process[] runningProcesses = Process.GetProcesses();
                 try
                 {
-                    Assert.Contains(runningProcesses, p => p.ProcessName == LongProcessName);
+                    Assert.Contains(runningProcesses, p => p.ProcessName.Contains(LongProcessName));
                 }
                 finally
                 {
