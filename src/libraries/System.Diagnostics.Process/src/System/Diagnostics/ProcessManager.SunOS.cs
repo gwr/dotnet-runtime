@@ -49,12 +49,18 @@ namespace System.Diagnostics
         /// <returns>The array of modules.</returns>
         internal static ProcessModuleCollection GetModules(int processId)
         {
+
+            // Negative PIDs aren't valid
+            ArgumentOutOfRangeException.ThrowIfNegative(processId);
+
             // GetModules(x)[0].FileName is often used to find the path to the executable, so at least
             // get that.
             // TODO: is there better way to get loaded modules?
-            if (Interop.procfs.TryReadProcessStatusInfo(processId, out Interop.procfs.ProcessStatusInfo _, out string? shortProcessName))
+
+            Interop.procfs.ProcessStatusInfo iinfo;
+            if (Interop.procfs.TryReadProcessStatusInfo(processId, out iinfo))
             {
-                string fullName = Process.GetUntruncatedProcessName(processId, shortProcessName);
+                string fullName = Process.GetUntruncatedProcessName(ref iinfo);
                 if (!string.IsNullOrEmpty(fullName))
                 {
                     return new ProcessModuleCollection(1)
@@ -74,40 +80,38 @@ namespace System.Diagnostics
             // Negative PIDs aren't valid
             ArgumentOutOfRangeException.ThrowIfNegative(pid);
 
-            // Could return null if the filter does not match.
-            Debug.Assert(processNameFilter is null, "Not used on Linux");
-
             Interop.procfs.ProcessStatusInfo iinfo;
-            string? procName;
-
-            if (! Interop.procfs.TryReadProcessStatusInfo(pid, out iinfo, out procName))
+            if (! Interop.procfs.TryReadProcessStatusInfo(pid, out iinfo))
             {
                 return null;
             }
 
-            // XXX Todo: filter by process like like OSX?
-            // If filter specified and no match, return null
-            return iCreateProcessInfo(ref iinfo, shortProcessName: procName);
+            string processName = Process.GetUntruncatedProcessName(ref iinfo);
+            if (!string.IsNullOrEmpty(processNameFilter) &&
+                !string.Equals(processName, processNameFilter, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            return iCreateProcessInfo(ref iinfo);
         }
 
         /// <summary>
         /// Creates a ProcessInfo from the data parsed from a /proc/pid/psinfo file and the associated lwp directory.
         /// </summary>
-        internal static ProcessInfo iCreateProcessInfo(ref Interop.procfs.ProcessStatusInfo iinfo,
-                           string shortProcessName, string? fullProcessName = null)
+        internal static ProcessInfo iCreateProcessInfo(ref Interop.procfs.ProcessStatusInfo iinfo)
         {
-            int pid = iinfo.Pid;
+            string name = Process.GetUntruncatedProcessName(ref iinfo);
 
             var pi = new ProcessInfo()
             {
-                ProcessId = pid,
-
-                // TODO: get BasePriority from lwp?
-                ProcessName = fullProcessName ?? Process.GetUntruncatedProcessName(pid, shortProcessName) ?? string.Empty,
-
-                // VirtualBytes = iinfo.VirtualBytes,
-                WorkingSet = (long)iinfo.ResidentSetSize,
+                ProcessId = iinfo.Pid,
+                ProcessName = name,
+                BasePriority = iinfo.Priority,
                 SessionId = iinfo.SessionId,
+                VirtualBytes = (long)iinfo.VirtualSize,
+                WorkingSet = (long)iinfo.ResidentSetSize,
+                // StartTime: See Process.StartTimeCore()
             };
 
             // TODO: translate LWP to thread
