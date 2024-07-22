@@ -20,18 +20,6 @@ namespace System.Diagnostics
     public partial class Process : IDisposable
     {
 
-        /// <summary>Gets the amount of time the process has spent running code inside the operating system core.</summary>
-        [UnsupportedOSPlatform("ios")]
-        [UnsupportedOSPlatform("tvos")]
-        [SupportedOSPlatform("maccatalyst")]
-        public TimeSpan PrivilegedProcessorTime
-        {
-            get
-            {
-                throw new PlatformNotSupportedException();
-            }
-        }
-
         /// <summary>Gets the time the associated process was started.</summary>
         internal DateTime StartTimeCore
         {
@@ -69,7 +57,11 @@ namespace System.Diagnostics
         {
             get
             {
-                throw new PlatformNotSupportedException();
+                // a.k.a. "user" + "system" time
+                Interop.procfs.ProcessStatusInfo status = GetStatus();
+                TimeSpan ts = TimeSpan.FromSeconds(status.CpuTotalTime.TvSec) +
+                    TimeSpan.FromMicroseconds(status.CpuTotalTime.TvNsec / 1000);
+                return ts;
             }
         }
 
@@ -84,7 +76,26 @@ namespace System.Diagnostics
         {
             get
             {
-                throw new PlatformNotSupportedException();
+                // a.k.a. "user" time
+                // Could get this from /proc/$pid/status
+                // Just say it's all user time for now
+                return TotalProcessorTime;
+            }
+        }
+
+        /// <summary>Gets the amount of time the process has spent running code inside the operating system core.</summary>
+        [UnsupportedOSPlatform("ios")]
+        [UnsupportedOSPlatform("tvos")]
+        [SupportedOSPlatform("maccatalyst")]
+        public TimeSpan PrivilegedProcessorTime
+        {
+            get
+            {
+                // a.k.a. "system" time
+                // Could get this from /proc/$pid/status
+                // Just say it's all user time for now
+                EnsureState(State.HaveNonExitedId);
+                return TimeSpan.Zero;
             }
         }
 

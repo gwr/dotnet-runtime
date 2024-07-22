@@ -112,6 +112,7 @@ internal static partial class Interop
             internal nuint VirtualSize;
             internal nuint ResidentSetSize;
             internal Interop.Sys.TimeSpec StartTime;
+            internal Interop.Sys.TimeSpec CpuTotalTime; // user+sys
             internal string? Args;
             // add more fields when needed.
         }
@@ -158,6 +159,8 @@ internal static partial class Interop
                 result.ResidentSetSize = (nuint)pr.pr_rssize * 1024; // pr_rssize is in Kbytes
                 result.StartTime.TvSec = pr.pr_start.tv_sec;
                 result.StartTime.TvNsec = pr.pr_start.tv_nsec;
+                result.CpuTotalTime.TvSec = pr.pr_time.tv_sec;
+                result.CpuTotalTime.TvNsec = pr.pr_time.tv_nsec;
                 result.Args = Marshal.PtrToStringUTF8((IntPtr)pr.pr_psargs);
 
                 ret = true;
