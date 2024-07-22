@@ -19,6 +19,9 @@ namespace System.Diagnostics
         {
             get
             {
+                // XXX not yet
+                // Interop.procfs.ParsedStat stat = GetThrStat();
+                // return GetThreadPriorityFromSysPri(stat.Priority);
                 throw new PlatformNotSupportedException();
             }
             set

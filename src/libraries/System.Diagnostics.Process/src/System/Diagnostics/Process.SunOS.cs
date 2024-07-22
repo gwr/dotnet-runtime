@@ -25,7 +25,7 @@ namespace System.Diagnostics
         {
             get
             {
-                Interop.procfs.ProcessStatusInfo status = GetStatus();
+                Interop.procfs.ProcessStatusInfo status = GetProcStatus();
 
                 DateTime startTime = DateTime.UnixEpoch +
                     TimeSpan.FromSeconds(status.StartTime.TvSec) +
@@ -37,7 +37,7 @@ namespace System.Diagnostics
         }
 
         /// <summary>Gets the parent process ID</summary>
-        private int ParentProcessId => GetStatus().ParentPid;
+        private int ParentProcessId => GetProcStatus().ParentPid;
 
         /// <summary>Gets execution path</summary>
         private static string? GetPathToOpenFile()
@@ -58,7 +58,7 @@ namespace System.Diagnostics
             get
             {
                 // a.k.a. "user" + "system" time
-                Interop.procfs.ProcessStatusInfo status = GetStatus();
+                Interop.procfs.ProcessStatusInfo status = GetProcStatus();
                 TimeSpan ts = TimeSpan.FromSeconds(status.CpuTotalTime.TvSec) +
                     TimeSpan.FromMicroseconds(status.CpuTotalTime.TvNsec / 1000);
                 return ts;
@@ -126,7 +126,7 @@ namespace System.Diagnostics
         }
 
         /// <summary>Reads the stats information for this process from the procfs file system.</summary>
-        private Interop.procfs.ProcessStatusInfo GetStatus()
+        private Interop.procfs.ProcessStatusInfo GetProcStatus()
         {
             EnsureState(State.HaveNonExitedId);
             Interop.procfs.ProcessStatusInfo status;
