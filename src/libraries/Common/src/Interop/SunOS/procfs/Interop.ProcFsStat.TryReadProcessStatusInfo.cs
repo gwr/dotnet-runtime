@@ -16,6 +16,8 @@ internal static partial class Interop
     {
         internal const string RootPath = "/proc/";
         private const string psinfoFileName = "/psinfo";
+        private const string lwpDirName = "/lwp";
+        private const string lwpsinfoFileName = "/lwpsinfo";
 
         // Constants from sys/procfs.h
         private const int PRARGSZ = 80;
@@ -102,23 +104,40 @@ internal static partial class Interop
             public      lwpsinfo pr_lwp;        /* information for representative lwp */
         }
 
+        // Ouput type for TryReadProcessThreadInfo()
+        internal struct ProcessThreadInfo
+        {
+            internal uint Tid;
+            internal int Priority;
+            internal int NiceVal;
+            internal char Status;
+            // add more fields when needed.
+        }
+
         // Ouput type for TryReadProcessStatusInfo()
         internal struct ProcessStatusInfo
         {
             internal int Pid;
             internal int ParentPid;
             internal int SessionId;
-            internal int Priority;
             internal nuint VirtualSize;
             internal nuint ResidentSetSize;
             internal Interop.Sys.TimeSpec StartTime;
             internal Interop.Sys.TimeSpec CpuTotalTime; // user+sys
             internal string? Args;
             // add more fields when needed.
+            internal ProcessThreadInfo Lwp1;
         }
 
         internal static string GetInfoFilePathForProcess(int pid) =>
             string.Create(null, stackalloc char[256], $"{RootPath}{(uint)pid}{psinfoFileName}");
+
+        internal static string GetLwpDirForProcess(int pid) =>
+            string.Create(null, stackalloc char[256], $"{RootPath}{(uint)pid}{lwpDirName}");
+
+        internal static string GetInfoFilePathForThread(int pid, int tid) =>
+            string.Create(null, stackalloc char[256],
+                          $"{RootPath}{(uint)pid}{lwpDirName}/{(uint)tid}{lwpsinfoFileName}");
 
         /// <summary>
         /// Attempts to get status info for the specified process ID.
@@ -154,7 +173,6 @@ internal static partial class Interop
                 result.Pid = pr.pr_pid;
                 result.ParentPid = pr.pr_ppid;
                 result.SessionId = pr.pr_sid;
-                result.Priority = pr.pr_lwp.pr_pri;
                 result.VirtualSize = (nuint)pr.pr_size * 1024; // pr_rssize is in Kbytes
                 result.ResidentSetSize = (nuint)pr.pr_rssize * 1024; // pr_rssize is in Kbytes
                 result.StartTime.TvSec = pr.pr_start.tv_sec;
@@ -162,6 +180,12 @@ internal static partial class Interop
                 result.CpuTotalTime.TvSec = pr.pr_time.tv_sec;
                 result.CpuTotalTime.TvNsec = pr.pr_time.tv_nsec;
                 result.Args = Marshal.PtrToStringUTF8((IntPtr)pr.pr_psargs);
+
+                // We get LWP[1] for "free"
+                result.Lwp1.Tid = pr.pr_lwp.pr_lwpid;
+                result.Lwp1.Priority = pr.pr_lwp.pr_pri;
+                result.Lwp1.NiceVal = (int)pr.pr_lwp.pr_nice;
+                result.Lwp1.Status = (char)pr.pr_lwp.pr_sname;
 
                 ret = true;
             }
@@ -176,5 +200,57 @@ internal static partial class Interop
 
             return ret;
         }
+
+        /// <summary>
+        /// Attempts to get status info for the specified Thread ID.
+        /// </summary>
+        /// <param name="pid">PID of the process to read status info for.</param>
+        /// <param name="tid">TID of the thread to read status info for.</param>
+        /// <param name="result">The pointer to processStatusInfo instance.</param>
+        /// <returns>
+        /// true if the process status was read; otherwise, false.
+        /// </returns>
+
+        // ProcessManager.SunOS.cs calls this
+        // "unsafe" due to use of fixed-size buffers
+
+        internal static unsafe bool TryReadProcessThreadInfo(int pid, int tid, out ProcessThreadInfo result)
+        {
+            result = default;
+            bool ret = false;
+            string fileName = "?";
+            IntPtr ptr = 0;
+
+            try
+            {
+                fileName = GetInfoFilePathForThread(pid, tid);
+                int size = Marshal.SizeOf<lwpsinfo>();
+                ptr = Marshal.AllocHGlobal(size);
+
+                BinaryReader br = new BinaryReader(File.OpenRead(fileName));
+                byte[] buf = br.ReadBytes(size);
+                Marshal.Copy(buf, 0, ptr, size);
+
+                procfs.lwpsinfo lwp = Marshal.PtrToStructure<lwpsinfo>(ptr);
+
+                result.Tid = lwp.pr_lwpid;
+                result.Priority = lwp.pr_pri;
+                result.NiceVal = (int)lwp.pr_nice;
+                result.Status = (char)lwp.pr_sname;
+
+                ret = true;
+            }
+            catch (Exception e)
+            {
+                Debug.Fail($"Failed to read \"{fileName}\": {e}");
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+
+            return ret;
+        }
+
     }
 }

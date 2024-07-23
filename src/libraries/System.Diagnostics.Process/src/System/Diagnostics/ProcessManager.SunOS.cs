@@ -57,10 +57,10 @@ namespace System.Diagnostics
             // get that.
             // TODO: is there better way to get loaded modules?
 
-            Interop.procfs.ProcessStatusInfo iinfo;
-            if (Interop.procfs.TryReadProcessStatusInfo(processId, out iinfo))
+            Interop.procfs.ProcessStatusInfo iProcInfo;
+            if (Interop.procfs.TryReadProcessStatusInfo(processId, out iProcInfo))
             {
-                string fullName = Process.GetUntruncatedProcessName(ref iinfo);
+                string fullName = Process.GetUntruncatedProcessName(ref iProcInfo);
                 if (!string.IsNullOrEmpty(fullName))
                 {
                     return new ProcessModuleCollection(1)
@@ -80,43 +80,20 @@ namespace System.Diagnostics
             // Negative PIDs aren't valid
             ArgumentOutOfRangeException.ThrowIfNegative(pid);
 
-            Interop.procfs.ProcessStatusInfo iinfo;
-            if (! Interop.procfs.TryReadProcessStatusInfo(pid, out iinfo))
+            Interop.procfs.ProcessStatusInfo iProcInfo;
+            if (! Interop.procfs.TryReadProcessStatusInfo(pid, out iProcInfo))
             {
                 return null;
             }
 
-            string processName = Process.GetUntruncatedProcessName(ref iinfo);
+            string processName = Process.GetUntruncatedProcessName(ref iProcInfo);
             if (!string.IsNullOrEmpty(processNameFilter) &&
                 !string.Equals(processName, processNameFilter, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
 
-            return iCreateProcessInfo(ref iinfo);
-        }
-
-        /// <summary>
-        /// Creates a ProcessInfo from the data parsed from a /proc/pid/psinfo file and the associated lwp directory.
-        /// </summary>
-        internal static ProcessInfo iCreateProcessInfo(ref Interop.procfs.ProcessStatusInfo iinfo)
-        {
-            string name = Process.GetUntruncatedProcessName(ref iinfo);
-
-            var pi = new ProcessInfo()
-            {
-                ProcessId = iinfo.Pid,
-                ProcessName = name,
-                BasePriority = iinfo.Priority,
-                SessionId = iinfo.SessionId,
-                VirtualBytes = (long)iinfo.VirtualSize,
-                WorkingSet = (long)iinfo.ResidentSetSize,
-                // StartTime: See Process.StartTimeCore()
-            };
-
-            // TODO: translate LWP to thread
-
-            return pi;
+            return iCreateProcessInfo(ref iProcInfo);
         }
 
         // ----------------------------------
@@ -139,5 +116,138 @@ namespace System.Diagnostics
                 }
             }
         }
+
+        /// <summary>Enumerates the IDs of all threads in the specified process.</summary>
+        internal static IEnumerable<int> EnumerateThreadIds(int pid)
+        {
+            // Parse /proc/$pid/lwp for any directory that's named with a number.  Each such
+            // directory represents a process.
+            string dir = Interop.procfs.GetLwpDirForProcess(pid);
+            foreach (string lwpDir in Directory.EnumerateDirectories(dir))
+            {
+                string dirName = Path.GetFileName(lwpDir);
+                int tid;
+                if (int.TryParse(dirName, NumberStyles.Integer, CultureInfo.InvariantCulture, out tid))
+                {
+                    Debug.Assert(tid >= 0);
+                    yield return tid;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates a ProcessInfo from the data read from a /proc/pid/psinfo file and the associated lwp directory.
+        /// </summary>
+        internal static ProcessInfo iCreateProcessInfo(ref Interop.procfs.ProcessStatusInfo iProcInfo)
+        {
+            int pid = iProcInfo.Pid;
+
+            string name = Process.GetUntruncatedProcessName(ref iProcInfo);
+            var pi = new ProcessInfo()
+            {
+                ProcessId = pid,
+                ProcessName = name,
+                BasePriority = iProcInfo.Lwp1.Priority,
+                SessionId = iProcInfo.SessionId,
+                VirtualBytes = (long)iProcInfo.VirtualSize,
+                WorkingSet = (long)iProcInfo.ResidentSetSize,
+                // StartTime: See Process.StartTimeCore()
+            };
+
+            // Then read through /proc/pid/lwp/ to find each thread in the process...
+            // Can we use a "get" method to avoid loading this for every process until it's asked for?
+            try
+            {
+
+                // Iterate through all thread IDs to load information about each thread
+                IEnumerable<int> tids = EnumerateThreadIds(pid);
+
+                // We already have the first LWP in iiProcInfo.Lwp1
+                ThreadInfo? ti = iCreateThreadInfo(ref iProcInfo, ref iProcInfo.Lwp1);
+                if (ti != null)
+                {
+                    pi._threadInfoList.Add(ti);
+                }
+
+                foreach (int tid in tids)
+                {
+                    if (tid == iProcInfo.Lwp1.Tid)
+                    {
+                        continue;
+                    }
+
+                    Interop.procfs.ProcessThreadInfo iThrInfo;
+                    if (! Interop.procfs.TryReadProcessThreadInfo(pid, tid, out iThrInfo))
+                    {
+                        continue;
+                    }
+
+                    ti = iCreateThreadInfo(ref iProcInfo, ref iThrInfo);
+                    if (ti != null)
+                    {
+                        pi._threadInfoList.Add(ti);
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                // Between the time that we get an ID and the time that we try to read the associated
+                // directories and files in procfs, the process could be gone.
+            }
+
+            // Finally return what we've built up
+            return pi;
+        }
+
+        /// <summary>
+        /// Creates a ThreadInfo from the data read from a /proc/pid/lwp/lwpsinfo file.
+        /// </summary>
+        internal static ThreadInfo iCreateThreadInfo(ref Interop.procfs.ProcessStatusInfo iProcInfo,
+                                                     ref Interop.procfs.ProcessThreadInfo iThrInfo)
+        {
+
+            var ti = new ThreadInfo()
+            {
+                _processId = iProcInfo.Pid,
+                _threadId = (ulong)iThrInfo.Tid,
+                _basePriority = iThrInfo.Priority,
+                _currentPriority = iThrInfo.Priority,
+                _startAddress = null,
+                _threadState = ProcFsStateToThreadState(iThrInfo.Status),
+                _threadWaitReason = ThreadWaitReason.Unknown
+            };
+
+            return ti;
+        }
+
+        /// <summary>Gets a ThreadState to represent the value returned from the status field of /proc/pid/stat.</summary>
+        /// <param name="c">The status field value.</param>
+        /// <returns></returns>
+        private static ThreadState ProcFsStateToThreadState(char c)
+        {
+            // Information on these in fs/proc/array.c
+            // `man proc` does not document them all
+            switch (c)
+            {
+                case 'O': // On-CPU
+                case 'R': // Runnable
+                    return ThreadState.Running;
+
+                case 'S': // Sleeping in a wait
+                case 'T': // Stopped on a signal
+                    return ThreadState.Wait;
+
+                case 'Z': // Zombie
+                    return ThreadState.Terminated;
+
+                case 'W': // Waiting for CPU
+                    return ThreadState.Transition;
+
+                default:
+                    Debug.Fail($"Unexpected status character: {c}");
+                    return ThreadState.Unknown;
+            }
+        }
+
     }
 }
