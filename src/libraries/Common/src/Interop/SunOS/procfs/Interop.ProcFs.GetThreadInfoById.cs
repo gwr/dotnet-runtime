@@ -44,14 +44,7 @@ internal static partial class Interop
 
                 procfs.lwpsinfo lwp = Marshal.PtrToStructure<lwpsinfo>(ptr);
 
-                result.Tid = lwp.pr_lwpid;
-                result.Priority = lwp.pr_pri;
-                result.NiceVal = (int)lwp.pr_nice;
-                result.Status = (char)lwp.pr_sname;
-                result.StartTime.TvSec = lwp.pr_start.tv_sec;
-                result.StartTime.TvNsec = lwp.pr_start.tv_nsec;
-                result.CpuTotalTime.TvSec = lwp.pr_time.tv_sec;
-                result.CpuTotalTime.TvNsec = lwp.pr_time.tv_nsec;
+                GetThreadInfoFromInternal(ref result, ref lwp);
 
                 ret = true;
             }
