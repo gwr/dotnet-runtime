@@ -720,6 +720,26 @@ check_c_source_compiles(
     "
     INOTIFY_RM_WATCH_WD_UNSIGNED)
 
+check_c_source_compiles(
+    "
+    #include <port.h>
+
+    int main(void)
+    {
+        intptr_t fd;
+        uint32_t wd;
+        return inotify_rm_watch(fd, wd);
+    }
+    "
+    HAVE_PORTFS_WATCH_WD_UNSIGNED)
+
+check_prototype_definition(
+    port_associate
+    "int port_associate(int, int, uintptr_t, int, void *)"
+    0
+    "port.h"
+    HAVE_SUNOS_PORTFS)
+
 set (CMAKE_REQUIRED_FLAGS ${PREVIOUS_CMAKE_REQUIRED_FLAGS})
 
 check_prototype_definition(
