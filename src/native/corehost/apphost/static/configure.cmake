@@ -17,3 +17,9 @@ if (HeimdalGssApi)
        gssapi/gssapi.h
        HAVE_HEIMDAL_HEADERS)
 endif()
+
+if (CLR_CMAKE_TARGET_SUNOS)
+   check_include_files(
+       gssapi/gssapi.h
+       HAVE_SUNOS_GSSAPI)
+endif()

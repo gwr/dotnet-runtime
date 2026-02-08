@@ -9,14 +9,20 @@
 
 #if HAVE_GSSFW_HEADERS
 #include <GSS/GSS.h>
-#else
-#if HAVE_HEIMDAL_HEADERS
+#elif HAVE_HEIMDAL_HEADERS
 #include <gssapi/gssapi.h>
 #include <gssapi/gssapi_krb5.h>
+#elif HAVE_SUNOS_GSSAPI
+#include <gssapi/gssapi.h>
+#include <gssapi/gssapi_ext.h>
 #else
 #include <gssapi/gssapi_ext.h>
 #include <gssapi/gssapi_krb5.h>
 #endif
+
+#if HAVE_SUNOS_GSSAPI
+// SunOS uses g_OID_equal instead of gss_oid_equal
+#define gss_oid_equal g_OID_equal
 #endif
 
 #include <assert.h>
@@ -37,10 +43,18 @@ c_static_assert(PAL_GSS_C_INTEG_FLAG == GSS_C_INTEG_FLAG);
 c_static_assert(PAL_GSS_C_ANON_FLAG == GSS_C_ANON_FLAG);
 c_static_assert(PAL_GSS_C_PROT_READY_FLAG == GSS_C_PROT_READY_FLAG);
 c_static_assert(PAL_GSS_C_TRANS_FLAG == GSS_C_TRANS_FLAG);
+#ifdef	GSS_C_DCE_STYLE
 c_static_assert(PAL_GSS_C_DCE_STYLE == GSS_C_DCE_STYLE);
+#endif
+#ifdef	GSS_C_IDENTIFY_FLAG
 c_static_assert(PAL_GSS_C_IDENTIFY_FLAG == GSS_C_IDENTIFY_FLAG);
+#endif
+#ifdef	GSS_C_EXTENDED_ERROR_FLAG
 c_static_assert(PAL_GSS_C_EXTENDED_ERROR_FLAG == GSS_C_EXTENDED_ERROR_FLAG);
+#endif
+#ifdef	GSS_C_DELEG_POLICY_FLAG
 c_static_assert(PAL_GSS_C_DELEG_POLICY_FLAG == GSS_C_DELEG_POLICY_FLAG);
+#endif
 
 c_static_assert(PAL_GSS_COMPLETE == GSS_S_COMPLETE);
 c_static_assert(PAL_GSS_CONTINUE_NEEDED == GSS_S_CONTINUE_NEEDED);
@@ -436,7 +450,7 @@ uint32_t NetSecurityNative_AcceptSecContext(uint32_t* minorStatus,
     // flag. So, we'll set it here to keep the behavior consistent with Windows platform.
     if (*isNtlmUsed == 1)
     {
-        *retFlags |= GSS_C_IDENTIFY_FLAG;
+        *retFlags |= PAL_GSS_C_IDENTIFY_FLAG;
     }
 
     NetSecurityNative_MoveBuffer(&gssBuffer, outBuffer);
