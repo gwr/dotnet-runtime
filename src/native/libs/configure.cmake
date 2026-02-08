@@ -22,8 +22,15 @@ elseif (CLR_CMAKE_TARGET_FREEBSD)
     include_directories(SYSTEM ${CROSS_ROOTFS}/usr/local/include)
     set(CMAKE_REQUIRED_INCLUDES ${CROSS_ROOTFS}/usr/local/include)
 elseif (CLR_CMAKE_TARGET_SUNOS)
-    # requires /opt/tools when building in Global Zone (GZ)
-    include_directories(SYSTEM /opt/local/include /opt/tools/include)
+    if (CROSS_ROOTFS)
+        # Cross-compilation: use headers from the cross-rootfs
+        include_directories(SYSTEM ${CROSS_ROOTFS}/usr/include)
+        include_directories(SYSTEM ${CROSS_ROOTFS}/include)
+        set(CMAKE_REQUIRED_INCLUDES ${CROSS_ROOTFS}/usr/include ${CROSS_ROOTFS}/include)
+    else()
+        # Native build: requires /opt/tools when building in Global Zone (GZ)
+        include_directories(SYSTEM /opt/local/include /opt/tools/include)
+    endif()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector")
 endif ()
 
@@ -1056,6 +1063,12 @@ if (HeimdalGssApi)
    check_include_files(
        gssapi/gssapi.h
        HAVE_HEIMDAL_HEADERS)
+endif()
+
+if (CLR_CMAKE_TARGET_SUNOS)
+   check_include_files(
+       gssapi/gssapi.h
+       HAVE_SUNOS_GSSAPI)
 endif()
 
 check_include_files(
