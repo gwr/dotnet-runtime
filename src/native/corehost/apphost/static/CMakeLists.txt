@@ -93,6 +93,11 @@ endif()
 
 install_with_stripped_symbols(singlefilehost TARGETS corehost COMPONENT runtime)
 
+# Set up include paths for cross-compilation header checks
+if(CLR_CMAKE_TARGET_SUNOS AND CROSS_ROOTFS)
+    set(CMAKE_REQUIRED_INCLUDES ${CROSS_ROOTFS}/usr/include ${CROSS_ROOTFS}/include)
+endif()
+
 include(configure.cmake)
 
 if(CLR_CMAKE_HOST_UNIX)

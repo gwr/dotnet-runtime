@@ -10,6 +10,11 @@ typedef struct gss_name_t_desc_struct GssName;
 typedef struct gss_ctx_id_t_desc_struct GssCtxId;
 typedef struct gss_cred_id_t_desc_struct GssCredId;
 typedef struct gss_buffer_desc_struct GssBuffer;
+#elif HAVE_SUNOS_GSSAPI
+typedef struct gss_name GssName;
+typedef struct gss_ctx_id GssCtxId;
+typedef struct gss_cred_id GssCredId;
+typedef struct gss_buffer_desc_struct GssBuffer;
 #else
 typedef struct gss_name_struct GssName;
 typedef struct gss_ctx_id_struct GssCtxId;
