@@ -283,13 +283,37 @@ static int OpenICULibraries(int majorVer, int minorVer, int subVer, const char* 
     c_static_assert_msg(sizeof("libicui18n.so") + MaxICUVersionStringLength <= sizeof(libicui18nName), "The libicui18nName is too small");
     GetVersionedLibFileName("libicui18n.so", majorVer, minorVer, subVer, versionPrefix, libicui18nName);
 
+    // Try loading from default library search path first
     libicuuc = dlopen(libicuucName, RTLD_LAZY);
+
+#if defined(TARGET_SUNOS)
+    // On illumos/Solaris, try additional paths where ICU might be installed
+    if (libicuuc == NULL)
+    {
+        // OmniOS ooce packages install to /opt/ooce/lib/amd64
+        char fullPath[512];
+        snprintf(fullPath, sizeof(fullPath), "/opt/ooce/lib/amd64/%s", libicuucName);
+        libicuuc = dlopen(fullPath, RTLD_LAZY);
+    }
+#endif
+
     if (libicuuc != NULL)
     {
         char symbolSuffix[SYMBOL_CUSTOM_SUFFIX_SIZE]="";
         if (FindSymbolVersion(majorVer, minorVer, subVer, symbolName, symbolVersion, MaxICUVersionStringLength, symbolSuffix))
         {
+            // Try loading i18n from default path first
             libicui18n = dlopen(libicui18nName, RTLD_LAZY);
+
+#if defined(TARGET_SUNOS)
+            // On illumos/Solaris, try additional paths
+            if (libicui18n == NULL)
+            {
+                char fullPath[512];
+                snprintf(fullPath, sizeof(fullPath), "/opt/ooce/lib/amd64/%s", libicui18nName);
+                libicui18n = dlopen(fullPath, RTLD_LAZY);
+            }
+#endif
         }
         if (libicui18n == NULL)
         {
