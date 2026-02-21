@@ -445,12 +445,20 @@ static DIR* OpenUserStore(const char* storePath, char** pathTmp, size_t* pathTmp
         return NULL;
     }
 
-    struct dirent* ent = NULL;
     size_t storePathLen = strlen(storePath);
 
-    // d_name is a fixed length char[], not a char*.
-    // Leave one byte for '\0' and one for '/'
-    size_t allocSize = storePathLen + sizeof(ent->d_name) + 2;
+    // Allocate enough space for the store path, a '/', the maximum filename length, and a null terminator
+    // On some platforms (like illumos), d_name is declared as char[1], so sizeof(d_name) doesn't give
+    // the actual maximum length. Use NAME_MAX or MAXNAMLEN instead.
+#ifdef NAME_MAX
+    size_t maxNameLen = NAME_MAX;
+#elif defined(MAXNAMLEN)
+    size_t maxNameLen = MAXNAMLEN;
+#else
+    size_t maxNameLen = 255; // Reasonable default
+#endif
+
+    size_t allocSize = storePathLen + maxNameLen + 2; // +2 for '/' and '\0'
     char* tmp = (char*)calloc(allocSize, sizeof(char));
     if (!tmp)
     {
@@ -480,10 +488,16 @@ static X509* ReadNextPublicCert(DIR* dir, X509Stack* tmpStack, char* pathTmp, si
 
     while ((next = readdir(dir)) != NULL)
     {
-        size_t len = strnlen(next->d_name, sizeof(next->d_name));
+        size_t len = strlen(next->d_name);
 
         if (len > 4 && 0 == strncasecmp(".pfx", next->d_name + len - 4, 4))
         {
+            if (len >= remaining)
+            {
+                // Filename too long for buffer, skip it
+                continue;
+            }
+
             memcpy_s(nextFileWrite, remaining, next->d_name, len);
             // if d_name was full-length it might not have a trailing null.
             nextFileWrite[len] = 0;
