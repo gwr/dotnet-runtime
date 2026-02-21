@@ -13,6 +13,11 @@ namespace System.Net.Test.Common
             {
                 return false;
             }
+            // illumos/Solaris GSSAPI does not include NTLM support
+            if (PlatformDetection.IsSunOS)
+            {
+                return false;
+            }
             return
                 // Linux bionic uses managed NTLM implementation
                 (OperatingSystem.IsLinux() && RuntimeInformation.RuntimeIdentifier.StartsWith("linux-bionic-", StringComparison.Ordinal)) ||
