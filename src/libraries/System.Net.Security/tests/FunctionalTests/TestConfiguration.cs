@@ -26,7 +26,7 @@ namespace System.Net.Security.Tests
         public const string NtlmUserFilePath = "/var/tmp/ntlm_user_file";
 
         public static bool SupportsNullEncryption { get { return s_supportsNullEncryption.Value; } }
-        public static bool SupportsHandshakeAlerts { get { return OperatingSystem.IsLinux() || OperatingSystem.IsWindows() || OperatingSystem.IsFreeBSD(); } }
+        public static bool SupportsHandshakeAlerts { get { return OperatingSystem.IsLinux() || OperatingSystem.IsWindows() || OperatingSystem.IsFreeBSD() || OperatingSystem.IsSunOS(); } }
         public static bool SupportsRenegotiation { get { return OperatingSystem.IsWindows() || ((OperatingSystem.IsLinux() || OperatingSystem.IsFreeBSD()) && PlatformDetection.OpenSslVersion >= new Version(1, 1, 1)); } }
 
         public static readonly X509Certificate2 ServerCertificate = System.Net.Test.Common.Configuration.Certificates.GetServerCertificate();

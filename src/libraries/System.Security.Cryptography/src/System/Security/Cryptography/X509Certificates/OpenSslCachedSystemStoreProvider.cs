@@ -235,9 +235,15 @@ namespace System.Security.Cryptography.X509Certificates
                     // The additional data contains the appropriate usage (e.g. emailProtection, serverAuth, ...).
                     // Because we don't validate for a specific usage, derived certificates are rejected.
                     // For now, we skip the certificates with AUX data and use the regular certificates.
+                    // However, OpenSSL 3.x systems may only have TRUSTED CERTIFICATE format, so fall back
+                    // to reading TRUSTED format if no regular certificates were found.
                     ICertificatePal? pal;
+                    bool hasNonAuxCerts = false;
+                    long bioPosition = Interop.Crypto.BioTell(fileBio);
+
                     while (OpenSslX509CertificateReader.TryReadX509PemNoAux(fileBio, out pal))
                     {
+                        hasNonAuxCerts = true;
                         readData = true;
                         X509Certificate2 cert = new X509Certificate2(pal);
 
@@ -282,6 +288,56 @@ namespace System.Security.Cryptography.X509Certificates
                         // There's a good chance we'll encounter duplicates on systems that have both one-cert-per-file
                         // and one-big-file trusted certificate stores. Anything that wasn't unique will end up here.
                         cert.Dispose();
+                    }
+
+                    // OpenSSL 3.x systems may only have certificates in TRUSTED CERTIFICATE format.
+                    // If no regular certificates were found, fall back to reading TRUSTED format.
+                    if (!hasNonAuxCerts)
+                    {
+                        Interop.Crypto.BioSeek(fileBio, (int)bioPosition);
+
+                        while (OpenSslX509CertificateReader.TryReadX509Pem(fileBio, out pal))
+                        {
+                            readData = true;
+                            X509Certificate2 cert = new X509Certificate2(pal);
+
+                            if (StringComparer.Ordinal.Equals(cert.Subject, cert.Issuer))
+                            {
+                                if (uniqueRootCerts.Add(cert))
+                                {
+                                    using (SafeX509Handle tmp = Interop.Crypto.X509UpRef(pal.Handle))
+                                    {
+                                        if (!Interop.Crypto.PushX509StackField(rootStore, tmp))
+                                        {
+                                            throw Interop.Crypto.CreateOpenSslCryptographicException();
+                                        }
+
+                                        tmp.SetHandleAsInvalid();
+                                    }
+
+                                    continue;
+                                }
+                            }
+                            else
+                            {
+                                if (uniqueIntermediateCerts.Add(cert))
+                                {
+                                    using (SafeX509Handle tmp = Interop.Crypto.X509UpRef(pal.Handle))
+                                    {
+                                        if (!Interop.Crypto.PushX509StackField(intermedStore, tmp))
+                                        {
+                                            throw Interop.Crypto.CreateOpenSslCryptographicException();
+                                        }
+
+                                        tmp.SetHandleAsInvalid();
+                                    }
+
+                                    continue;
+                                }
+                            }
+
+                            cert.Dispose();
+                        }
                     }
                 }
 
