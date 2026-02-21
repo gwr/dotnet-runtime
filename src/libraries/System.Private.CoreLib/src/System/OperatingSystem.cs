@@ -195,6 +195,17 @@ namespace System
             => IsFreeBSD() && IsOSVersionAtLeast(major, minor, build, revision);
 
         /// <summary>
+        /// Indicates whether the current application is running on illumos or Solaris.
+        /// </summary>
+        [NonVersionable]
+        public static bool IsSunOS() =>
+#if TARGET_ILLUMOS || TARGET_SOLARIS
+            true;
+#else
+            false;
+#endif
+
+        /// <summary>
         /// Indicates whether the current application is running on Android.
         /// </summary>
         [NonVersionable]

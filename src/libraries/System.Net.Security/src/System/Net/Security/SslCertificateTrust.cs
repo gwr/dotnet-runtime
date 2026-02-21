@@ -22,6 +22,7 @@ namespace System.Net.Security
             }
 #endif
             if (sendTrustInHandshake && !System.OperatingSystem.IsLinux() && !System.OperatingSystem.IsMacOS() &&
+                !OperatingSystem.IsSunOS() &&
                 // Necessary functions are available only on win 8 onwards
                 !OperatingSystem.IsWindowsVersionAtLeast(6, 2))
             {
@@ -48,7 +49,7 @@ namespace System.Net.Security
                 throw new PlatformNotSupportedException(SR.net_ssl_trust_collection);
             }
 #else
-            if (sendTrustInHandshake && !System.OperatingSystem.IsLinux() && !System.OperatingSystem.IsMacOS())
+            if (sendTrustInHandshake && !System.OperatingSystem.IsLinux() && !System.OperatingSystem.IsMacOS() && !System.OperatingSystem.IsSunOS())
             {
                 throw new PlatformNotSupportedException(SR.net_ssl_trust_handshake);
             }
