@@ -75,7 +75,8 @@ namespace System.IO
 
                 var runner = new RunningInstance(
                     this, _directory, "",
-                    IncludeSubdirectories, NotifyFilter, cancellation.Token);
+                    IncludeSubdirectories, NotifyFilter, cancellation.Token,
+                    _maxSubdirectoriesPerDirectory, _maxFilesWatchedPerDirectory);
 
                 _cancellation = cancellation;
                 _enabled = true;
@@ -93,9 +94,6 @@ namespace System.IO
         private void StopRaisingEvents()
         {
             _enabled = false;
-
-            if (IsSuspended())
-                return;
 
             var cts = _cancellation;
             if (cts is not null)
@@ -119,19 +117,53 @@ namespace System.IO
 
         private CancellationTokenSource? _cancellation;
 
+        // Configuration for resource limits (loaded once per watcher instance)
+        private readonly int _maxSubdirectoriesPerDirectory = GetConfigurationInt32(
+            "System.IO.FileSystem.Watcher.Illumos.MaxSubdirectoriesPerDirectory",
+            "DOTNET_SYSTEM_IO_FSW_ILLUMOS_MAXSUBDIRS",
+            50);
+
+        private readonly int _maxFilesWatchedPerDirectory = GetConfigurationInt32(
+            "System.IO.FileSystem.Watcher.Illumos.MaxFilesWatchedPerDirectory",
+            "DOTNET_SYSTEM_IO_FSW_ILLUMOS_MAXFILES",
+            1000);
+
+        private static int GetConfigurationInt32(string appCtxSettingName, string envVarName, int defaultValue)
+        {
+            // First check AppContext
+            switch (AppContext.GetData(appCtxSettingName))
+            {
+                case uint value:
+                    return (int)value;
+                case int value:
+                    return value;
+                case string str when int.TryParse(str, out int parsed):
+                    return parsed;
+            }
+
+            // Fall back to environment variable
+            string? envVar = Environment.GetEnvironmentVariable(envVarName);
+            if (envVar != null && int.TryParse(envVar, out int envValue))
+            {
+                return envValue;
+            }
+
+            return defaultValue;
+        }
+
         private sealed class RunningInstance
         {
-            // Resource limits
-            private const int MaxSubdirectoriesPerDirectory = 50;
-            private const int MaxFilesWatchedPerDirectory = 1000;
+            // Resource limits (passed from parent watcher)
+            private readonly int _maxSubdirectoriesPerDirectory;
+            private readonly int _maxFilesWatchedPerDirectory;
 
             // Event mask for directory watches (always FILE_MODIFIED to detect entry add/remove)
-            private const int DirectoryEventMask = Interop.PortFs.PortEvent.FILE_MODIFIED;
+            private const int DirectoryEventMask = (int)Interop.PortFs.PortEvent.FILE_MODIFIED;
 
             // Event mask for cancelling a PortGet (just make it wake up)
             // The actual event flag chosen here does not matter, though to avoid confusion
             // this uses an event flag that we don't need to use for anything else.
-            private const int CancellationEventMask = Interop.PortFs.PortEvent.FILE_NOFOLLOW;
+            private const int CancellationEventMask = (int)Interop.PortFs.PortEvent.FILE_NOFOLLOW;
 
             // Core state
             private readonly WeakReference<FileSystemWatcher> _weakWatcher;
@@ -182,7 +214,8 @@ namespace System.IO
 
             internal RunningInstance(
                 FileSystemWatcher watcher, string directoryPath, string relativePath,
-                bool includeSubdirectories, NotifyFilters notifyFilters, CancellationToken cancellationToken)
+                bool includeSubdirectories, NotifyFilters notifyFilters, CancellationToken cancellationToken,
+                int maxSubdirectoriesPerDirectory, int maxFilesWatchedPerDirectory)
             {
                 _weakWatcher = new WeakReference<FileSystemWatcher>(watcher);
 
@@ -195,6 +228,8 @@ namespace System.IO
                 _includeSubdirectories = includeSubdirectories;
                 _notifyFilters = notifyFilters;
                 _cancellationToken = cancellationToken;
+                _maxSubdirectoriesPerDirectory = maxSubdirectoriesPerDirectory;
+                _maxFilesWatchedPerDirectory = maxFilesWatchedPerDirectory;
 
                 // Convert NotifyFilters to portfs event mask
                 _portEventMask = GetPortEventMask(notifyFilters);
@@ -230,22 +265,22 @@ namespace System.IO
 
                 // FileName/DirectoryName: detect when entries are added/removed
                 if ((filters & (NotifyFilters.FileName | NotifyFilters.DirectoryName)) != 0)
-                    mask |= Interop.PortFs.PortEvent.FILE_MODIFIED;
+                    mask |= (int)Interop.PortFs.PortEvent.FILE_MODIFIED;
 
                 // LastWrite/Size: detect content/size changes
                 if ((filters & (NotifyFilters.LastWrite | NotifyFilters.Size)) != 0)
                 {
-                    mask |= Interop.PortFs.PortEvent.FILE_MODIFIED;
-                    mask |= Interop.PortFs.PortEvent.FILE_TRUNC;
+                    mask |= (int)Interop.PortFs.PortEvent.FILE_MODIFIED;
+                    mask |= (int)Interop.PortFs.PortEvent.FILE_TRUNC;
                 }
 
                 // Attributes/Security/CreationTime: detect attribute changes
                 if ((filters & (NotifyFilters.Attributes | NotifyFilters.Security | NotifyFilters.CreationTime)) != 0)
-                    mask |= Interop.PortFs.PortEvent.FILE_ATTRIB;
+                    mask |= (int)Interop.PortFs.PortEvent.FILE_ATTRIB;
 
                 // LastAccess: detect access time changes
                 if ((filters & NotifyFilters.LastAccess) != 0)
-                    mask |= Interop.PortFs.PortEvent.FILE_ACCESS;
+                    mask |= (int)Interop.PortFs.PortEvent.FILE_ACCESS;
 
                 return mask;
             }
@@ -253,7 +288,7 @@ namespace System.IO
             private void InitializeWatch()
             {
                 // Create initial snapshot
-                _snapshot = DirectorySnapshot.Create(_directoryPath, _notifyFilters);
+                _snapshot = DirectorySnapshot.Create(_directoryPath);
 
                 // Associate directory for name changes
                 AssociateDirectory();
@@ -304,12 +339,12 @@ namespace System.IO
 
                 foreach ((string name, FileEntry entry) in snapshot.SortedEntries)
                 {
-                    if (filesAssociated >= MaxFilesWatchedPerDirectory)
+                    if (filesAssociated >= _maxFilesWatchedPerDirectory)
                     {
                         if (_weakWatcher.TryGetTarget(out FileSystemWatcher? watcher))
                         {
                             watcher.OnError(new ErrorEventArgs(
-                                new IOException(SR.Format(SR.FSW_MaxFilesWatchedExceeded, MaxFilesWatchedPerDirectory, _directoryPath))));
+                                new IOException(SR.Format(SR.FSW_MaxFilesWatchedExceeded, _maxFilesWatchedPerDirectory, _directoryPath))));
                         }
                         break;
                     }
@@ -361,12 +396,12 @@ namespace System.IO
                     if (!entry.IsDirectory)
                         continue;
 
-                    if (subdirCount >= MaxSubdirectoriesPerDirectory)
+                    if (subdirCount >= _maxSubdirectoriesPerDirectory)
                     {
                         if (_weakWatcher.TryGetTarget(out FileSystemWatcher? watcher))
                         {
                             watcher.OnError(new ErrorEventArgs(
-                                new IOException(SR.Format(SR.FSW_MaxSubdirectoriesExceeded, MaxSubdirectoriesPerDirectory, _directoryPath))));
+                                new IOException(SR.Format(SR.FSW_MaxSubdirectoriesExceeded, _maxSubdirectoriesPerDirectory, _directoryPath))));
                         }
                         break;
                     }
@@ -388,7 +423,8 @@ namespace System.IO
                         if (_weakWatcher.TryGetTarget(out FileSystemWatcher? watcher))
                         {
                             // Share parent's cancellation token so entire tree can be cancelled together
-                            var childWatcher = new RunningInstance(watcher, subdirPath, subdirRelativePath, true, _notifyFilters, _cancellationToken);
+                            var childWatcher = new RunningInstance(watcher, subdirPath, subdirRelativePath, true, _notifyFilters, _cancellationToken,
+                                _maxSubdirectoriesPerDirectory, _maxFilesWatchedPerDirectory);
                             childWatcher.Start();
                             lock (_subdirectoryWatchers)
                             {
@@ -493,7 +529,7 @@ namespace System.IO
                 DirectorySnapshot newSnapshot;
                 try
                 {
-                    newSnapshot = DirectorySnapshot.Create(_directoryPath, _notifyFilters);
+                    newSnapshot = DirectorySnapshot.Create(_directoryPath);
                 }
                 catch (DirectoryNotFoundException)
                 {
@@ -705,7 +741,7 @@ namespace System.IO
                 // If hybrid mode, associate the new file
                 if (_watchIndividualFiles)
                 {
-                    if (_nameToWatchMap.Count < MaxFilesWatchedPerDirectory)
+                    if (_nameToWatchMap.Count < _maxFilesWatchedPerDirectory)
                     {
                         AssociateSingleFile(name, newEntry);
                     }
@@ -715,7 +751,7 @@ namespace System.IO
                         if (_weakWatcher.TryGetTarget(out FileSystemWatcher? watcherInstance))
                         {
                             watcherInstance.OnError(new ErrorEventArgs(
-                                new IOException(SR.Format(SR.FSW_MaxFilesWatchedExceeded, MaxFilesWatchedPerDirectory, _directoryPath))));
+                                new IOException(SR.Format(SR.FSW_MaxFilesWatchedExceeded, _maxFilesWatchedPerDirectory, _directoryPath))));
                         }
                     }
                 }
@@ -723,7 +759,7 @@ namespace System.IO
                 // If subdirectory, create watcher
                 if (isDir && _includeSubdirectories)
                 {
-                    if (_subdirectoryWatchers.Count < MaxSubdirectoriesPerDirectory)
+                    if (_subdirectoryWatchers.Count < _maxSubdirectoriesPerDirectory)
                     {
                         CreateSingleSubdirectoryWatcher(name);
                     }
@@ -733,7 +769,7 @@ namespace System.IO
                         if (_weakWatcher.TryGetTarget(out FileSystemWatcher? watcherInstance))
                         {
                             watcherInstance.OnError(new ErrorEventArgs(
-                                new IOException(SR.Format(SR.FSW_MaxSubdirectoriesExceeded, MaxSubdirectoriesPerDirectory, _directoryPath))));
+                                new IOException(SR.Format(SR.FSW_MaxSubdirectoriesExceeded, _maxSubdirectoriesPerDirectory, _directoryPath))));
                         }
                     }
                 }
@@ -848,7 +884,8 @@ namespace System.IO
                 {
                     if (_weakWatcher.TryGetTarget(out FileSystemWatcher? watcher))
                     {
-                        var childWatcher = new RunningInstance(watcher, subdirPath, subdirRelativePath, true, _notifyFilters, _cancellationToken);
+                        var childWatcher = new RunningInstance(watcher, subdirPath, subdirRelativePath, true, _notifyFilters, _cancellationToken,
+                            _maxSubdirectoriesPerDirectory, _maxFilesWatchedPerDirectory);
                         childWatcher.Start();
                         lock (_subdirectoryWatchers)
                         {
@@ -1064,7 +1101,7 @@ namespace System.IO
                 DirectoryMTime = mtime;
             }
 
-            internal static DirectorySnapshot Create(string path, NotifyFilters filters)
+            internal static DirectorySnapshot Create(string path)
             {
                 // Get directory mtime before reading
                 if (Interop.Sys.Stat(path, out Interop.Sys.FileStatus status) != 0)
@@ -1086,7 +1123,7 @@ namespace System.IO
                     string name = System.IO.Path.GetFileName(entry);
                     try
                     {
-                        FileEntry fileEntry = FileEntry.Create(entry, filters);
+                        FileEntry fileEntry = FileEntry.Create(entry);
                         entries.Add((name, fileEntry));
                     }
                     catch
@@ -1108,7 +1145,7 @@ namespace System.IO
             internal Interop.Sys.TimeSpec MTime;
             internal long Inode;
 
-            internal static FileEntry Create(string path, NotifyFilters filters)
+            internal static FileEntry Create(string path)
             {
                 if (Interop.Sys.Stat(path, out Interop.Sys.FileStatus status) != 0)
                 {
