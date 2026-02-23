@@ -47,6 +47,11 @@ if (CLR_CMAKE_HOST_UNIX)
     else()
         add_compile_options(-g)
     endif()
+    # enable $<LINK_GROUP:RESCAN> on Unix using --start-group/--end-group for circular references
+    if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        set(CMAKE_LINK_GROUP_USING_RESCAN "LINKER:--start-group" "LINKER:--end-group")
+        set(CMAKE_LINK_GROUP_USING_RESCAN_SUPPORTED ON)
+    endif()
 endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
