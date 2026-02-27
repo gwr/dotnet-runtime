@@ -188,8 +188,10 @@ int32_t SystemNative_EnumerateInterfaceAddresses(void* context,
         char* result = if_indextoname(interfaceIndex, actualName);
         if (result == NULL)
         {
-            freeifaddrs(headAddr);
-            return -1;
+            // On some platforms (e.g., Solaris/illumos), if_indextoname can fail
+            // for alias interfaces or interfaces without a valid index.
+            // Skip these interfaces rather than failing the entire enumeration.
+            continue;
         }
 
         assert(result == actualName);
@@ -685,7 +687,7 @@ int32_t SystemNative_EnumerateGatewayAddressesForInterface(void* context, uint32
     (void)context;
     (void)interfaceIndex;
     (void)onGatewayFound;
-    errno = ENOTSUP;
-    return -1;
+    // Return success but don't enumerate any gateways
+    return 0;
 }
 #endif // HAVE_RT_MSGHDR
