@@ -997,10 +997,19 @@ check_symbol_exists(
     unistd.h
     HAVE_GETPEEREID)
 
-check_symbol_exists(
-    getdomainname
-    unistd.h
-    HAVE_GETDOMAINNAME)
+set (PREVIOUS_CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES})
+if (CLR_CMAKE_TARGET_SUNOS)
+    # On SunOS, getdomainname is in libnsl but not declared in any header
+    set(CMAKE_REQUIRED_LIBRARIES socket nsl)
+    check_function_exists(
+        getdomainname
+        HAVE_GETDOMAINNAME)
+else()
+    check_symbol_exists(
+        getdomainname
+        unistd.h
+        HAVE_GETDOMAINNAME)
+endif()
 
 # getdomainname on OSX takes an 'int' instead of a 'size_t'
 # check if compiling with 'size_t' would cause a warning
@@ -1020,6 +1029,7 @@ check_c_source_compiles(
     "
     HAVE_GETDOMAINNAME_SIZET)
 set (CMAKE_REQUIRED_FLAGS ${PREVIOUS_CMAKE_REQUIRED_FLAGS})
+set (CMAKE_REQUIRED_LIBRARIES ${PREVIOUS_CMAKE_REQUIRED_LIBRARIES})
 
 set (PREVIOUS_CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES})
 if (HAVE_SYS_INOTIFY_H AND CLR_CMAKE_TARGET_FREEBSD)
