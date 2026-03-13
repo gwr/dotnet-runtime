@@ -183,7 +183,12 @@ namespace System.IO.Tests
                     if (!setBeforeBeginInit)
                         watcher.EnableRaisingEvents = true;
                     watcher.EndInit();
-                    ExpectEvent(watcher, WatcherChangeTypes.Created | WatcherChangeTypes.Deleted, () => new TempFile(Path.Combine(TestDirectory, GetTestFileName())).Dispose(), null);
+                    ExpectEvent(watcher, WatcherChangeTypes.Created | WatcherChangeTypes.Deleted, () =>
+                    {
+                        var tempFile = new TempFile(Path.Combine(TestDirectory, GetTestFileName()));
+                        Thread.Sleep(50);
+                        tempFile.Dispose();
+                    }, null);
                 }
             }, maxAttempts: DefaultAttemptsForExpectedEvent, backoffFunc: (iteration) => RetryDelayMilliseconds, retryWhen: e => e is XunitException);
         }
