@@ -183,7 +183,12 @@ namespace System.IO.Tests
                     if (!setBeforeBeginInit)
                         watcher.EnableRaisingEvents = true;
                     watcher.EndInit();
-                    ExpectEvent(watcher, WatcherChangeTypes.Created | WatcherChangeTypes.Deleted, () => new TempFile(Path.Combine(TestDirectory, GetTestFileName())).Dispose(), null);
+                    ExpectEvent(watcher, WatcherChangeTypes.Created | WatcherChangeTypes.Deleted, () =>
+                    {
+                        var tempFile = new TempFile(Path.Combine(TestDirectory, GetTestFileName()));
+                        Thread.Sleep(100);
+                        tempFile.Dispose();
+                    }, null);
                 }
             }, maxAttempts: DefaultAttemptsForExpectedEvent, backoffFunc: (iteration) => RetryDelayMilliseconds, retryWhen: e => e is XunitException);
         }
@@ -226,7 +231,9 @@ namespace System.IO.Tests
         public void DroppedWatcher_Collectible()
         {
             WeakReference watcher = CreateEnabledWatcher(TestDirectory);
-            File.Create(GetTestFilePath()).Dispose();
+            var tempFile = new TempFile(Path.Combine(TestDirectory, GetTestFileName()));
+            Thread.Sleep(100);
+            tempFile.Dispose();
             Assert.True(SpinWait.SpinUntil(() =>
             {
                 GC.Collect();
